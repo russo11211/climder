@@ -12,6 +12,9 @@ import {
   Alert,
   PanResponder
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import Svg, { Path } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -78,11 +81,12 @@ const locations = [
   }
 ];
 
-// Componente do Editor de Croquis Funcional
-const CroquisEditor = ({ onClose }) => {
+// EDITOR DE CROQUIS COM IMPLEMENTAÇÃO REAL
+const CroquisEditorReal = ({ onClose, locationId = 1 }) => {
   const [selectedTool, setSelectedTool] = useState('route');
   const [currentPhoto, setCurrentPhoto] = useState(null);
   const [drawingPaths, setDrawingPaths] = useState([]);
+  const [currentPath, setCurrentPath] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
 
   const drawingTools = [
@@ -96,18 +100,90 @@ const CroquisEditor = ({ onClose }) => {
 
   const selectedToolData = drawingTools.find(tool => tool.id === selectedTool);
 
-  const handlePhotoCapture = (type) => {
-    // Simulação de captura de foto para demonstração
-    // Na implementação real usaríamos expo-camera ou expo-image-picker
-    const mockPhoto = {
-      uri: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=600&fit=crop',
-      type: type,
-      timestamp: new Date().toISOString()
-    };
-    setCurrentPhoto(mockPhoto);
+  // IMPLEMENTAÇÃO REAL - CÂMERA E GALERIA
+  const requestGalleryPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permissão Necessária',
+        'Precisamos de permissão para acessar a galeria de fotos.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
   };
 
-  // PanResponder para capturar gestos de desenho
+  const requestCameraPermissions = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permissão Necessária',
+        'Precisamos de permissão para acessar a câmera.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const handleTakePhoto = async () => {
+    const hasPermission = await requestCameraPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+        exif: false
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        setCurrentPhoto({
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          type: 'camera',
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao tirar foto:', error);
+      Alert.alert('Erro', 'Não foi possível acessar a câmera.');
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    const hasPermission = await requestGalleryPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+        exif: false
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        setCurrentPhoto({
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
+          type: 'gallery',
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao escolher foto:', error);
+      Alert.alert('Erro', 'Não foi possível acessar a galeria.');
+    }
+  };
+
+  // IMPLEMENTAÇÃO REAL - DESENHO SVG
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -117,65 +193,112 @@ const CroquisEditor = ({ onClose }) => {
       
       const { locationX, locationY } = evt.nativeEvent;
       setIsDrawing(true);
-      
-      const newPath = {
-        id: Date.now(),
-        tool: selectedTool,
-        color: selectedToolData.color,
-        points: [{ x: locationX, y: locationY }]
-      };
-      
-      setDrawingPaths(prev => [...prev, newPath]);
+      setCurrentPath(`M${locationX},${locationY}`);
     },
     
     onPanResponderMove: (evt) => {
       if (!isDrawing || !currentPhoto) return;
       
       const { locationX, locationY } = evt.nativeEvent;
-      
-      setDrawingPaths(prev => {
-        const updatedPaths = [...prev];
-        const lastPath = updatedPaths[updatedPaths.length - 1];
-        if (lastPath) {
-          lastPath.points.push({ x: locationX, y: locationY });
-        }
-        return updatedPaths;
-      });
+      setCurrentPath(prev => `${prev} L${locationX},${locationY}`);
     },
     
     onPanResponderRelease: () => {
+      if (!isDrawing || !currentPath) return;
+      
+      const newPath = {
+        id: Date.now(),
+        d: currentPath,
+        stroke: selectedToolData.color,
+        strokeWidth: 3,
+        tool: selectedTool,
+        timestamp: new Date().toISOString()
+      };
+      
+      setDrawingPaths(prev => [...prev, newPath]);
+      setCurrentPath('');
       setIsDrawing(false);
     }
   });
 
+  // IMPLEMENTAÇÃO REAL - ARMAZENAMENTO
+  const saveCroquisToStorage = async (croquisData) => {
+    try {
+      const storageKey = `croquis_location_${locationId}`;
+      const existingCroquis = await AsyncStorage.getItem(storageKey);
+      const croquisList = existingCroquis ? JSON.parse(existingCroquis) : [];
+      
+      const newCroquis = {
+        id: Date.now(),
+        ...croquisData,
+        locationId,
+        createdAt: new Date().toISOString(),
+        version: '1.0'
+      };
+      
+      croquisList.push(newCroquis);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(croquisList));
+      
+      console.log('Croquis salvo:', newCroquis.id);
+      return newCroquis.id;
+    } catch (error) {
+      console.error('Erro ao salvar croquis:', error);
+      throw error;
+    }
+  };
+
+  const handleSave = async () => {
+    if (drawingPaths.length === 0) {
+      Alert.alert('Atenção', 'Desenhe pelo menos um elemento antes de salvar.');
+      return;
+    }
+
+    try {
+      const croquisData = {
+        photo: currentPhoto,
+        paths: drawingPaths,
+        metadata: {
+          toolsUsed: [...new Set(drawingPaths.map(p => p.tool))],
+          totalElements: drawingPaths.length,
+          selectedTools: drawingTools.filter(tool => 
+            drawingPaths.some(path => path.tool === tool.id)
+          )
+        }
+      };
+      
+      const croquisId = await saveCroquisToStorage(croquisData);
+      
+      Alert.alert(
+        'Croquis Salvo! 🎉',
+        `Croquis #${croquisId} salvo com sucesso!\n\n` +
+        `📊 ${drawingPaths.length} elementos desenhados\n` +
+        `🛠️ Ferramentas: ${croquisData.metadata.toolsUsed.join(', ')}`,
+        [
+          { text: 'Criar Outro', onPress: () => setCurrentPhoto(null) },
+          { text: 'Fechar', onPress: onClose }
+        ]
+      );
+    } catch (error) {
+      Alert.alert(
+        'Erro ao Salvar',
+        'Não foi possível salvar o croquis. Verifique o armazenamento do dispositivo.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   const handleUndo = () => {
-    setDrawingPaths(prev => prev.slice(0, -1));
+    if (drawingPaths.length > 0) {
+      setDrawingPaths(prev => prev.slice(0, -1));
+    }
   };
 
-  const handleSave = () => {
-    const croquisData = {
-      photo: currentPhoto,
-      paths: drawingPaths,
-      timestamp: new Date().toISOString(),
-      location: "Local atual" // Aqui viria a localização real
-    };
-    
-    Alert.alert(
-      "Croquis Salvo! 🎉",
-      `Salvou ${drawingPaths.length} elementos na rota.`,
-      [{ text: "OK" }]
-    );
-    
-    console.log('Dados do croquis:', croquisData);
-  };
-
-  // Tela de seleção de foto
+  // RENDERIZAÇÃO - SELEÇÃO DE FOTO
   if (!currentPhoto) {
     return (
       <View style={styles.editorContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#1f2937" />
         
-        {/* Header */}
         <View style={styles.editorHeader}>
           <TouchableOpacity onPress={onClose}>
             <Text style={styles.backButtonText}>← Voltar</Text>
@@ -184,16 +307,19 @@ const CroquisEditor = ({ onClose }) => {
           <View style={{ width: 60 }} />
         </View>
 
-        {/* Seleção de foto */}
         <View style={styles.photoSelectionContainer}>
           <View style={styles.photoSelectionCard}>
             <Text style={styles.photoSelectionTitle}>
-              Escolha uma foto da parede
+              📸 Escolha uma foto da parede
+            </Text>
+            
+            <Text style={styles.photoSelectionSubtitle}>
+              Tire uma foto clara da rocha ou parede que você quer mapear
             </Text>
             
             <TouchableOpacity
               style={[styles.photoButton, styles.cameraButton]}
-              onPress={() => handlePhotoCapture('camera')}
+              onPress={handleTakePhoto}
             >
               <Text style={styles.photoButtonIcon}>📷</Text>
               <Text style={styles.photoButtonText}>Tirar Foto</Text>
@@ -201,14 +327,14 @@ const CroquisEditor = ({ onClose }) => {
             
             <TouchableOpacity
               style={[styles.photoButton, styles.galleryButton]}
-              onPress={() => handlePhotoCapture('gallery')}
+              onPress={handleChooseFromGallery}
             >
               <Text style={styles.photoButtonIcon}>🖼️</Text>
               <Text style={styles.photoButtonText}>Escolher da Galeria</Text>
             </TouchableOpacity>
             
             <Text style={styles.photoSelectionHint}>
-              Tire uma foto clara da parede ou rocha que você quer mapear
+              💡 Dica: Tire a foto de um ângulo que mostre bem as agarras e a linha da via
             </Text>
           </View>
         </View>
@@ -216,12 +342,11 @@ const CroquisEditor = ({ onClose }) => {
     );
   }
 
-  // Editor com canvas
+  // RENDERIZAÇÃO - EDITOR COM CANVAS
   return (
     <View style={styles.editorContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#1f2937" />
       
-      {/* Header */}
       <View style={styles.editorHeader}>
         <TouchableOpacity onPress={() => setCurrentPhoto(null)}>
           <Text style={styles.backButtonText}>← Nova Foto</Text>
@@ -232,7 +357,6 @@ const CroquisEditor = ({ onClose }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Canvas Area */}
       <View style={styles.canvasContainer}>
         <Image 
           source={{ uri: currentPhoto.uri }} 
@@ -240,25 +364,38 @@ const CroquisEditor = ({ onClose }) => {
           resizeMode="cover"
         />
         
-        {/* Área de desenho sobreposta */}
+        {/* SVG CANVAS REAL */}
         <View 
-          style={styles.drawingArea}
+          style={styles.svgContainer}
           {...panResponder.panHandlers}
         >
-          {/* Simulação visual dos paths desenhados */}
-          {drawingPaths.map((path, index) => (
-            <View
-              key={path.id}
-              style={[
-                styles.pathIndicator,
-                {
-                  backgroundColor: path.color,
-                  left: path.points[0]?.x - 5,
-                  top: path.points[0]?.y - 5,
-                }
-              ]}
-            />
-          ))}
+          <Svg style={styles.svgCanvas}>
+            {/* Paths salvos */}
+            {drawingPaths.map((path) => (
+              <Path
+                key={path.id}
+                d={path.d}
+                stroke={path.stroke}
+                strokeWidth={path.strokeWidth}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+            
+            {/* Path sendo desenhado */}
+            {currentPath && (
+              <Path
+                d={currentPath}
+                stroke={selectedToolData.color}
+                strokeWidth={3}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.8}
+              />
+            )}
+          </Svg>
         </View>
 
         {/* Info da ferramenta atual */}
@@ -267,18 +404,28 @@ const CroquisEditor = ({ onClose }) => {
           <Text style={styles.toolInfoText}>{selectedToolData.name}</Text>
         </View>
 
-        {/* Contador */}
+        {/* Contador de elementos */}
         <View style={styles.elementCounter}>
-          <Text style={styles.counterText}>Elementos: {drawingPaths.length}</Text>
+          <Text style={styles.counterText}>
+            {drawingPaths.length} elemento{drawingPaths.length !== 1 ? 's' : ''}
+          </Text>
         </View>
+
+        {/* Indicador de modo desenho */}
+        {isDrawing && (
+          <View style={styles.drawingIndicator}>
+            <Text style={styles.drawingIndicatorText}>✏️ Desenhando...</Text>
+          </View>
+        )}
       </View>
 
-      {/* Ferramentas */}
+      {/* FERRAMENTAS */}
       <View style={styles.toolsContainer}>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
           style={styles.toolsScroll}
+          contentContainerStyle={styles.toolsScrollContent}
         >
           {drawingTools.map((tool) => (
             <TouchableOpacity
@@ -290,12 +437,17 @@ const CroquisEditor = ({ onClose }) => {
               ]}
             >
               <Text style={styles.toolIcon}>{tool.icon}</Text>
-              <Text style={styles.toolName}>{tool.name}</Text>
+              <Text style={[
+                styles.toolName,
+                selectedTool === tool.id && styles.toolNameActive
+              ]}>
+                {tool.name}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Controles */}
+        {/* CONTROLES */}
         <View style={styles.controlsContainer}>
           <TouchableOpacity
             onPress={handleUndo}
@@ -306,7 +458,12 @@ const CroquisEditor = ({ onClose }) => {
               drawingPaths.length === 0 && styles.disabledButton
             ]}
           >
-            <Text style={styles.controlButtonText}>↶ Desfazer</Text>
+            <Text style={[
+              styles.controlButtonText,
+              drawingPaths.length === 0 && styles.disabledButtonText
+            ]}>
+              ↶ Desfazer ({drawingPaths.length})
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -318,7 +475,12 @@ const CroquisEditor = ({ onClose }) => {
               drawingPaths.length === 0 && styles.disabledButton
             ]}
           >
-            <Text style={styles.saveButtonText}>💾 Salvar</Text>
+            <Text style={[
+              styles.saveButtonText,
+              drawingPaths.length === 0 && styles.disabledButtonText
+            ]}>
+              💾 Salvar Croquis
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -326,7 +488,7 @@ const CroquisEditor = ({ onClose }) => {
   );
 };
 
-// App principal (código existente mantido + integração do editor)
+// APP PRINCIPAL (mantendo toda funcionalidade existente)
 export default function App() {
   const [currentProfile, setCurrentProfile] = useState(0);
   const [matches, setMatches] = useState([]);
@@ -343,7 +505,6 @@ export default function App() {
     setCurrentProfile((prev) => (prev + 1) % climberProfiles.length);
   };
 
-  // Componentes existentes (DiscoverView, MatchesView, GroupsView mantidos iguais)
   const DiscoverView = () => (
     <View style={styles.discoverContainer}>
       <Text style={styles.header}>🧗‍♀️ Climder</Text>
@@ -420,7 +581,6 @@ export default function App() {
 
   const LocationDetailView = () => (
     <ScrollView style={styles.screenContainer}>
-      {/* Header com botão voltar */}
       <View style={styles.detailHeader}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -435,7 +595,6 @@ export default function App() {
 
       <Text style={styles.locationDetailName}>{selectedLocation.name}</Text>
 
-      {/* Info básica */}
       <View style={styles.detailCard}>
         <Text style={styles.sectionTitle}>📍 Informações Básicas</Text>
         <View style={styles.infoGrid}>
@@ -459,47 +618,27 @@ export default function App() {
         <Text style={styles.description}>{selectedLocation.description}</Text>
       </View>
 
-      {/* Fotos do local */}
+      {/* BOTÃO PRINCIPAL PARA ABRIR O EDITOR REAL */}
       <View style={styles.detailCard}>
-        <Text style={styles.sectionTitle}>📸 Fotos do Local</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.photosContainer}>
-            {selectedLocation.photos.map((photo, idx) => (
-              <View key={idx} style={styles.photoItem}>
-                <Text style={styles.photoEmoji}>{photo}</Text>
-              </View>
-            ))}
-            <TouchableOpacity 
-              style={styles.addPhotoButton}
-              onPress={() => setShowCroquisEditor(true)}
-            >
-              <Text style={styles.addPhotoText}>📷 +</Text>
-            </TouchableOpacity>
+        <Text style={styles.sectionTitle}>🎨 Editor de Croquis</Text>
+        <Text style={styles.description}>
+          Crie croquis detalhados das vias fotografando a parede e desenhando as rotas com ferramentas específicas.
+        </Text>
+        
+        <TouchableOpacity 
+          style={styles.croquisMainButton}
+          onPress={() => setShowCroquisEditor(true)}
+        >
+          <Text style={styles.croquisMainButtonIcon}>🎨</Text>
+          <View style={styles.croquisMainButtonContent}>
+            <Text style={styles.croquisMainButtonText}>Criar Novo Croquis</Text>
+            <Text style={styles.croquisMainButtonSubtext}>
+              Fotografe e desenhe rotas com ferramentas profissionais
+            </Text>
           </View>
-        </ScrollView>
+        </TouchableOpacity>
       </View>
 
-      {/* Croquis - BOTÃO PRINCIPAL PARA ABRIR O EDITOR */}
-      <View style={styles.detailCard}>
-        <Text style={styles.sectionTitle}>🗺️ Croquis das Vias</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.croquiContainer}>
-            {selectedLocation.croquis.map((croqui, idx) => (
-              <View key={idx} style={styles.croquiItem}>
-                <Text style={styles.croquiEmoji}>{croqui}</Text>
-              </View>
-            ))}
-            <TouchableOpacity 
-              style={styles.addCroquiButton}
-              onPress={() => setShowCroquisEditor(true)}
-            >
-              <Text style={styles.addCroquiText}>🎨 Criar Croquis</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* Informações técnicas */}
       <View style={styles.detailCard}>
         <Text style={styles.sectionTitle}>ℹ️ Informações Técnicas</Text>
         <View style={styles.techInfo}>
@@ -549,18 +688,15 @@ export default function App() {
             
             <Text style={styles.locationDescription}>{location.description}</Text>
             
-            {/* Preview de fotos */}
             <View style={styles.photoPreview}>
               {location.photos.slice(0, 3).map((photo, idx) => (
                 <View key={idx} style={styles.photoPreviewItem}>
                   <Text style={styles.photoPreviewEmoji}>{photo}</Text>
                 </View>
               ))}
-              {location.photos.length > 3 && (
-                <View style={styles.photoPreviewMore}>
-                  <Text style={styles.photoPreviewMoreText}>+{location.photos.length - 3}</Text>
-                </View>
-              )}
+              <View style={styles.croquisPreviewBadge}>
+                <Text style={styles.croquisPreviewText}>🎨 Croquis</Text>
+              </View>
             </View>
           </TouchableOpacity>
         ))}
@@ -578,9 +714,14 @@ export default function App() {
     }
   };
 
-  // RENDERIZAÇÃO PRINCIPAL - Editor de Croquis ou App normal
+  // RENDERIZAÇÃO PRINCIPAL
   if (showCroquisEditor) {
-    return <CroquisEditor onClose={() => setShowCroquisEditor(false)} />;
+    return (
+      <CroquisEditorReal 
+        onClose={() => setShowCroquisEditor(false)}
+        locationId={selectedLocation?.id || 1}
+      />
+    );
   }
 
   return (
@@ -639,7 +780,6 @@ export default function App() {
   );
 }
 
-// STYLES - Estilos existentes + novos estilos para o editor
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -876,6 +1016,7 @@ const styles = StyleSheet.create({
   photoPreview: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
   },
   photoPreviewItem: {
     width: 32,
@@ -888,19 +1029,20 @@ const styles = StyleSheet.create({
   photoPreviewEmoji: {
     fontSize: 16,
   },
-  photoPreviewMore: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#e5e7eb',
+  croquisPreviewBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#10b981',
   },
-  photoPreviewMoreText: {
+  croquisPreviewText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#6b7280',
+    color: '#10b981',
   },
+  
   // Estilos para detalhes do local
   detailHeader: {
     flexDirection: 'row',
@@ -977,77 +1119,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     lineHeight: 20,
+    marginBottom: 12,
   },
-  photosContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingRight: 16,
-  },
-  photoItem: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  photoEmoji: {
-    fontSize: 32,
-  },
-  addPhotoButton: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#dbeafe',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+  
+  // BOTÃO PRINCIPAL DO CROQUIS
+  croquisMainButton: {
+    backgroundColor: '#f0f9ff',
     borderWidth: 2,
     borderColor: '#3b82f6',
-    borderStyle: 'dashed',
-  },
-  addPhotoText: {
-    color: '#3b82f6',
-    fontSize: 12,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  croquiContainer: {
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
-    gap: 12,
-    paddingRight: 16,
-  },
-  croquiItem: {
-    width: 100,
-    height: 80,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    marginTop: 8,
   },
-  croquiEmoji: {
+  croquisMainButtonIcon: {
     fontSize: 32,
+    marginRight: 16,
   },
-  addCroquiButton: {
-    width: 100,
-    height: 80,
-    backgroundColor: '#dcfce7',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#10b981',
-    borderStyle: 'dashed',
+  croquisMainButtonContent: {
+    flex: 1,
   },
-  addCroquiText: {
-    color: '#10b981',
-    fontSize: 10,
+  croquisMainButtonText: {
+    fontSize: 16,
     fontWeight: 'bold',
-    textAlign: 'center',
+    color: '#1f2937',
+    marginBottom: 4,
   },
+  croquisMainButtonSubtext: {
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+  },
+  
   techInfo: {
     marginBottom: 8,
   },
@@ -1089,8 +1193,8 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '600',
   },
-  
-  // NOVOS ESTILOS PARA O EDITOR DE CROQUIS
+
+  // ESTILOS DO EDITOR DE CROQUIS REAL
   editorContainer: {
     flex: 1,
     backgroundColor: '#1f2937',
@@ -1115,7 +1219,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   
-  // Seleção de foto
+  // SELEÇÃO DE FOTO
   photoSelectionContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1127,20 +1231,27 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 340,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 16,
     elevation: 8,
   },
   photoSelectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 24,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  photoSelectionSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
   },
   photoButton: {
     width: '100%',
@@ -1151,6 +1262,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cameraButton: {
     backgroundColor: '#3b82f6',
@@ -1168,14 +1284,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   photoSelectionHint: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
     textAlign: 'center',
     marginTop: 16,
-    lineHeight: 20,
+    lineHeight: 18,
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    borderRadius: 8,
   },
   
-  // Canvas
+  // CANVAS
   canvasContainer: {
     flex: 1,
     position: 'relative',
@@ -1184,33 +1303,34 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  drawingArea: {
+  svgContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
-  pathIndicator: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    opacity: 0.8,
+  svgCanvas: {
+    flex: 1,
   },
   toolInfo: {
     position: 'absolute',
     top: 16,
     left: 16,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   toolInfoIcon: {
-    fontSize: 16,
+    fontSize: 18,
     marginRight: 8,
   },
   toolInfoText: {
@@ -1222,18 +1342,37 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   counterText: {
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
   },
+  drawingIndicator: {
+    position: 'absolute',
+    top: 70,
+    left: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  drawingIndicatorText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   
-  // Ferramentas
+  // FERRAMENTAS
   toolsContainer: {
     backgroundColor: 'white',
     paddingTop: 16,
@@ -1241,19 +1380,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+    maxHeight: 140,
   },
   toolsScroll: {
     marginBottom: 16,
   },
+  toolsScrollContent: {
+    paddingHorizontal: 4,
+  },
   toolButton: {
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#e5e7eb',
     marginRight: 12,
-    minWidth: 80,
+    minWidth: 70,
+    backgroundColor: 'white',
   },
   toolButtonActive: {
     borderColor: '#3b82f6',
@@ -1269,8 +1413,11 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
   },
+  toolNameActive: {
+    color: '#1e40af',
+  },
   
-  // Controles
+  // CONTROLES
   controlsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -1281,6 +1428,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   undoButton: {
     backgroundColor: '#f3f4f6',
@@ -1290,6 +1442,8 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   controlButtonText: {
     fontSize: 14,
@@ -1300,5 +1454,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: 'white',
+  },
+  disabledButtonText: {
+    color: '#9ca3af',
   },
 });
