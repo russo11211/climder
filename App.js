@@ -1,5 +1,17 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Dimensions, 
+  SafeAreaView, 
+  StatusBar, 
+  ScrollView,
+  Image,
+  Alert,
+  PanResponder
+} from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -66,11 +78,261 @@ const locations = [
   }
 ];
 
+// Componente do Editor de Croquis Funcional
+const CroquisEditor = ({ onClose }) => {
+  const [selectedTool, setSelectedTool] = useState('route');
+  const [currentPhoto, setCurrentPhoto] = useState(null);
+  const [drawingPaths, setDrawingPaths] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const drawingTools = [
+    { id: 'route', name: 'Via', icon: '📍', color: '#ef4444' },
+    { id: 'hold', name: 'Agarras', icon: '🔴', color: '#3b82f6' },
+    { id: 'anchor', name: 'Ancoragem', icon: '⚓', color: '#10b981' },
+    { id: 'belay', name: 'Reunião', icon: '🔗', color: '#f59e0b' },
+    { id: 'grade', name: 'Graduação', icon: '📝', color: '#8b5cf6' },
+    { id: 'danger', name: 'Perigo', icon: '⚠️', color: '#dc2626' }
+  ];
+
+  const selectedToolData = drawingTools.find(tool => tool.id === selectedTool);
+
+  const handlePhotoCapture = (type) => {
+    // Simulação de captura de foto para demonstração
+    // Na implementação real usaríamos expo-camera ou expo-image-picker
+    const mockPhoto = {
+      uri: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=400&h=600&fit=crop',
+      type: type,
+      timestamp: new Date().toISOString()
+    };
+    setCurrentPhoto(mockPhoto);
+  };
+
+  // PanResponder para capturar gestos de desenho
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    
+    onPanResponderGrant: (evt) => {
+      if (!currentPhoto) return;
+      
+      const { locationX, locationY } = evt.nativeEvent;
+      setIsDrawing(true);
+      
+      const newPath = {
+        id: Date.now(),
+        tool: selectedTool,
+        color: selectedToolData.color,
+        points: [{ x: locationX, y: locationY }]
+      };
+      
+      setDrawingPaths(prev => [...prev, newPath]);
+    },
+    
+    onPanResponderMove: (evt) => {
+      if (!isDrawing || !currentPhoto) return;
+      
+      const { locationX, locationY } = evt.nativeEvent;
+      
+      setDrawingPaths(prev => {
+        const updatedPaths = [...prev];
+        const lastPath = updatedPaths[updatedPaths.length - 1];
+        if (lastPath) {
+          lastPath.points.push({ x: locationX, y: locationY });
+        }
+        return updatedPaths;
+      });
+    },
+    
+    onPanResponderRelease: () => {
+      setIsDrawing(false);
+    }
+  });
+
+  const handleUndo = () => {
+    setDrawingPaths(prev => prev.slice(0, -1));
+  };
+
+  const handleSave = () => {
+    const croquisData = {
+      photo: currentPhoto,
+      paths: drawingPaths,
+      timestamp: new Date().toISOString(),
+      location: "Local atual" // Aqui viria a localização real
+    };
+    
+    Alert.alert(
+      "Croquis Salvo! 🎉",
+      `Salvou ${drawingPaths.length} elementos na rota.`,
+      [{ text: "OK" }]
+    );
+    
+    console.log('Dados do croquis:', croquisData);
+  };
+
+  // Tela de seleção de foto
+  if (!currentPhoto) {
+    return (
+      <View style={styles.editorContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#1f2937" />
+        
+        {/* Header */}
+        <View style={styles.editorHeader}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.backButtonText}>← Voltar</Text>
+          </TouchableOpacity>
+          <Text style={styles.editorTitle}>Editor de Croquis</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        {/* Seleção de foto */}
+        <View style={styles.photoSelectionContainer}>
+          <View style={styles.photoSelectionCard}>
+            <Text style={styles.photoSelectionTitle}>
+              Escolha uma foto da parede
+            </Text>
+            
+            <TouchableOpacity
+              style={[styles.photoButton, styles.cameraButton]}
+              onPress={() => handlePhotoCapture('camera')}
+            >
+              <Text style={styles.photoButtonIcon}>📷</Text>
+              <Text style={styles.photoButtonText}>Tirar Foto</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.photoButton, styles.galleryButton]}
+              onPress={() => handlePhotoCapture('gallery')}
+            >
+              <Text style={styles.photoButtonIcon}>🖼️</Text>
+              <Text style={styles.photoButtonText}>Escolher da Galeria</Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.photoSelectionHint}>
+              Tire uma foto clara da parede ou rocha que você quer mapear
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Editor com canvas
+  return (
+    <View style={styles.editorContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#1f2937" />
+      
+      {/* Header */}
+      <View style={styles.editorHeader}>
+        <TouchableOpacity onPress={() => setCurrentPhoto(null)}>
+          <Text style={styles.backButtonText}>← Nova Foto</Text>
+        </TouchableOpacity>
+        <Text style={styles.editorTitle}>Desenhar Rota</Text>
+        <TouchableOpacity onPress={onClose}>
+          <Text style={styles.closeButtonText}>Fechar</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Canvas Area */}
+      <View style={styles.canvasContainer}>
+        <Image 
+          source={{ uri: currentPhoto.uri }} 
+          style={styles.canvasImage}
+          resizeMode="cover"
+        />
+        
+        {/* Área de desenho sobreposta */}
+        <View 
+          style={styles.drawingArea}
+          {...panResponder.panHandlers}
+        >
+          {/* Simulação visual dos paths desenhados */}
+          {drawingPaths.map((path, index) => (
+            <View
+              key={path.id}
+              style={[
+                styles.pathIndicator,
+                {
+                  backgroundColor: path.color,
+                  left: path.points[0]?.x - 5,
+                  top: path.points[0]?.y - 5,
+                }
+              ]}
+            />
+          ))}
+        </View>
+
+        {/* Info da ferramenta atual */}
+        <View style={styles.toolInfo}>
+          <Text style={styles.toolInfoIcon}>{selectedToolData.icon}</Text>
+          <Text style={styles.toolInfoText}>{selectedToolData.name}</Text>
+        </View>
+
+        {/* Contador */}
+        <View style={styles.elementCounter}>
+          <Text style={styles.counterText}>Elementos: {drawingPaths.length}</Text>
+        </View>
+      </View>
+
+      {/* Ferramentas */}
+      <View style={styles.toolsContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.toolsScroll}
+        >
+          {drawingTools.map((tool) => (
+            <TouchableOpacity
+              key={tool.id}
+              onPress={() => setSelectedTool(tool.id)}
+              style={[
+                styles.toolButton,
+                selectedTool === tool.id && styles.toolButtonActive
+              ]}
+            >
+              <Text style={styles.toolIcon}>{tool.icon}</Text>
+              <Text style={styles.toolName}>{tool.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Controles */}
+        <View style={styles.controlsContainer}>
+          <TouchableOpacity
+            onPress={handleUndo}
+            disabled={drawingPaths.length === 0}
+            style={[
+              styles.controlButton,
+              styles.undoButton,
+              drawingPaths.length === 0 && styles.disabledButton
+            ]}
+          >
+            <Text style={styles.controlButtonText}>↶ Desfazer</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={drawingPaths.length === 0}
+            style={[
+              styles.controlButton,
+              styles.saveButton,
+              drawingPaths.length === 0 && styles.disabledButton
+            ]}
+          >
+            <Text style={styles.saveButtonText}>💾 Salvar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// App principal (código existente mantido + integração do editor)
 export default function App() {
   const [currentProfile, setCurrentProfile] = useState(0);
   const [matches, setMatches] = useState([]);
   const [currentView, setCurrentView] = useState('discover');
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showCroquisEditor, setShowCroquisEditor] = useState(false);
 
   const currentClimber = climberProfiles[currentProfile];
 
@@ -81,6 +343,7 @@ export default function App() {
     setCurrentProfile((prev) => (prev + 1) % climberProfiles.length);
   };
 
+  // Componentes existentes (DiscoverView, MatchesView, GroupsView mantidos iguais)
   const DiscoverView = () => (
     <View style={styles.discoverContainer}>
       <Text style={styles.header}>🧗‍♀️ Climder</Text>
@@ -206,14 +469,17 @@ export default function App() {
                 <Text style={styles.photoEmoji}>{photo}</Text>
               </View>
             ))}
-            <TouchableOpacity style={styles.addPhotoButton}>
+            <TouchableOpacity 
+              style={styles.addPhotoButton}
+              onPress={() => setShowCroquisEditor(true)}
+            >
               <Text style={styles.addPhotoText}>📷 +</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
 
-      {/* Croquis */}
+      {/* Croquis - BOTÃO PRINCIPAL PARA ABRIR O EDITOR */}
       <View style={styles.detailCard}>
         <Text style={styles.sectionTitle}>🗺️ Croquis das Vias</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -223,8 +489,11 @@ export default function App() {
                 <Text style={styles.croquiEmoji}>{croqui}</Text>
               </View>
             ))}
-            <TouchableOpacity style={styles.addCroquiButton}>
-              <Text style={styles.addCroquiText}>📋 + Criar Croqui</Text>
+            <TouchableOpacity 
+              style={styles.addCroquiButton}
+              onPress={() => setShowCroquisEditor(true)}
+            >
+              <Text style={styles.addCroquiText}>🎨 Criar Croquis</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -309,6 +578,11 @@ export default function App() {
     }
   };
 
+  // RENDERIZAÇÃO PRINCIPAL - Editor de Croquis ou App normal
+  if (showCroquisEditor) {
+    return <CroquisEditor onClose={() => setShowCroquisEditor(false)} />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f9ff" />
@@ -365,6 +639,7 @@ export default function App() {
   );
 }
 
+// STYLES - Estilos existentes + novos estilos para o editor
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -813,5 +1088,217 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#6b7280',
     fontWeight: '600',
+  },
+  
+  // NOVOS ESTILOS PARA O EDITOR DE CROQUIS
+  editorContainer: {
+    flex: 1,
+    backgroundColor: '#1f2937',
+  },
+  editorHeader: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  editorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  closeButtonText: {
+    color: '#6b7280',
+    fontWeight: 'bold',
+  },
+  
+  // Seleção de foto
+  photoSelectionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  photoSelectionCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  photoSelectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  photoButton: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  cameraButton: {
+    backgroundColor: '#3b82f6',
+  },
+  galleryButton: {
+    backgroundColor: '#10b981',
+  },
+  photoButtonIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  photoButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  photoSelectionHint: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 20,
+  },
+  
+  // Canvas
+  canvasContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  canvasImage: {
+    width: '100%',
+    height: '100%',
+  },
+  drawingArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  pathIndicator: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    opacity: 0.8,
+  },
+  toolInfo: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toolInfoIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  toolInfoText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  elementCounter: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  counterText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  // Ferramentas
+  toolsContainer: {
+    backgroundColor: 'white',
+    paddingTop: 16,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  toolsScroll: {
+    marginBottom: 16,
+  },
+  toolButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    marginRight: 12,
+    minWidth: 80,
+  },
+  toolButtonActive: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#dbeafe',
+  },
+  toolIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  toolName: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  
+  // Controles
+  controlsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  controlButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  undoButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  saveButton: {
+    backgroundColor: '#10b981',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  controlButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#6b7280',
+  },
+  saveButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });
