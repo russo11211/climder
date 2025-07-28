@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, StatusBar, ScrollView } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,10 +33,44 @@ const climberProfiles = [
   }
 ];
 
+const locations = [
+  {
+    id: 1,
+    name: "Pedra Grande",
+    city: "Atibaia - SP",
+    type: "Escalada Esportiva",
+    difficulty: "5a - 8b",
+    routes: 45,
+    description: "Um dos locais mais clássicos de SP, com vias para todos os níveis. Excelente para iniciantes e escaladores experientes.",
+    photos: ["🏔️", "📸", "🧗‍♀️"],
+    croquis: ["📋", "🗺️"],
+    rating: 4.8,
+    access: "Fácil - Estacionamento próximo",
+    gear: "Quickdraws, cordas 60m",
+    coordinates: "-23.1089, -46.5477"
+  },
+  {
+    id: 2,
+    name: "Morro do Diabo",
+    city: "São Paulo - SP",
+    type: "Boulder / Trad",
+    difficulty: "V0 - V8 / 5c - 7a",
+    routes: 32,
+    description: "Área urbana com excelentes blocos e algumas vias tradicionais. Perfeito para treino após o trabalho.",
+    photos: ["🪨", "📸", "🌆"],
+    croquis: ["📋"],
+    rating: 4.2,
+    access: "Médio - Trilha de 15min",
+    gear: "Crash pads, friends",
+    coordinates: "-23.5505, -46.6333"
+  }
+];
+
 export default function App() {
   const [currentProfile, setCurrentProfile] = useState(0);
   const [matches, setMatches] = useState([]);
   const [currentView, setCurrentView] = useState('discover');
+  const [selectedLocation, setSelectedLocation] = useState(null);
 
   const currentClimber = climberProfiles[currentProfile];
 
@@ -121,19 +155,149 @@ export default function App() {
     </View>
   );
 
-  const LocationsView = () => (
-    <View style={styles.screenContainer}>
-      <Text style={styles.header}>🗺️ Locais de Escalada</Text>
-      <View style={styles.locationCard}>
-        <Text style={styles.locationName}>Pedra Grande</Text>
-        <Text style={styles.locationInfo}>📍 Atibaia - SP</Text>
-        <Text style={styles.locationInfo}>⭐ 4.8 • 45 vias • 5a-8b</Text>
-        <Text style={styles.locationDescription}>
-          Um dos locais mais clássicos de SP, com vias para todos os níveis.
-        </Text>
+  const LocationDetailView = () => (
+    <ScrollView style={styles.screenContainer}>
+      {/* Header com botão voltar */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => setSelectedLocation(null)}
+        >
+          <Text style={styles.backButtonText}>← Voltar</Text>
+        </TouchableOpacity>
+        <View style={styles.ratingContainer}>
+          <Text style={styles.rating}>⭐ {selectedLocation.rating}</Text>
+        </View>
       </View>
-    </View>
+
+      <Text style={styles.locationDetailName}>{selectedLocation.name}</Text>
+
+      {/* Info básica */}
+      <View style={styles.detailCard}>
+        <Text style={styles.sectionTitle}>📍 Informações Básicas</Text>
+        <View style={styles.infoGrid}>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Localização</Text>
+            <Text style={styles.infoValue}>{selectedLocation.city}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Tipo</Text>
+            <Text style={styles.infoValue}>{selectedLocation.type}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Dificuldade</Text>
+            <Text style={styles.infoValue}>{selectedLocation.difficulty}</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Vias</Text>
+            <Text style={styles.infoValue}>{selectedLocation.routes} vias</Text>
+          </View>
+        </View>
+        <Text style={styles.description}>{selectedLocation.description}</Text>
+      </View>
+
+      {/* Fotos do local */}
+      <View style={styles.detailCard}>
+        <Text style={styles.sectionTitle}>📸 Fotos do Local</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.photosContainer}>
+            {selectedLocation.photos.map((photo, idx) => (
+              <View key={idx} style={styles.photoItem}>
+                <Text style={styles.photoEmoji}>{photo}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addPhotoButton}>
+              <Text style={styles.addPhotoText}>📷 +</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Croquis */}
+      <View style={styles.detailCard}>
+        <Text style={styles.sectionTitle}>🗺️ Croquis das Vias</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.croquiContainer}>
+            {selectedLocation.croquis.map((croqui, idx) => (
+              <View key={idx} style={styles.croquiItem}>
+                <Text style={styles.croquiEmoji}>{croqui}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addCroquiButton}>
+              <Text style={styles.addCroquiText}>📋 + Criar Croqui</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Informações técnicas */}
+      <View style={styles.detailCard}>
+        <Text style={styles.sectionTitle}>ℹ️ Informações Técnicas</Text>
+        <View style={styles.techInfo}>
+          <Text style={styles.techLabel}>Acesso:</Text>
+          <Text style={styles.techValue}>{selectedLocation.access}</Text>
+        </View>
+        <View style={styles.techInfo}>
+          <Text style={styles.techLabel}>Equipamentos:</Text>
+          <Text style={styles.techValue}>{selectedLocation.gear}</Text>
+        </View>
+        <View style={styles.techInfo}>
+          <Text style={styles.techLabel}>Coordenadas:</Text>
+          <Text style={styles.techValue}>{selectedLocation.coordinates}</Text>
+        </View>
+      </View>
+    </ScrollView>
   );
+
+  const LocationsView = () => {
+    if (selectedLocation) {
+      return <LocationDetailView />;
+    }
+
+    return (
+      <View style={styles.screenContainer}>
+        <Text style={styles.header}>🗺️ Locais de Escalada</Text>
+        
+        {locations.map((location) => (
+          <TouchableOpacity 
+            key={location.id} 
+            style={styles.locationCard}
+            onPress={() => setSelectedLocation(location)}
+          >
+            <View style={styles.locationHeader}>
+              <Text style={styles.locationName}>{location.name}</Text>
+              <View style={styles.ratingBadge}>
+                <Text style={styles.ratingText}>⭐ {location.rating}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.locationInfoGrid}>
+              <Text style={styles.locationInfo}>📍 {location.city}</Text>
+              <Text style={styles.locationInfo}>🧗‍♀️ {location.type}</Text>
+              <Text style={styles.locationInfo}>📊 {location.difficulty}</Text>
+              <Text style={styles.locationInfo}>🔢 {location.routes} vias</Text>
+            </View>
+            
+            <Text style={styles.locationDescription}>{location.description}</Text>
+            
+            {/* Preview de fotos */}
+            <View style={styles.photoPreview}>
+              {location.photos.slice(0, 3).map((photo, idx) => (
+                <View key={idx} style={styles.photoPreviewItem}>
+                  <Text style={styles.photoPreviewEmoji}>{photo}</Text>
+                </View>
+              ))}
+              {location.photos.length > 3 && (
+                <View style={styles.photoPreviewMore}>
+                  <Text style={styles.photoPreviewMoreText}>+{location.photos.length - 3}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
 
   const renderCurrentView = () => {
     switch(currentView) {
@@ -154,7 +318,10 @@ export default function App() {
         <View style={styles.tabBar}>
           <TouchableOpacity 
             style={[styles.tab, currentView === 'discover' && styles.activeTab]}
-            onPress={() => setCurrentView('discover')}
+            onPress={() => {
+              setCurrentView('discover');
+              setSelectedLocation(null);
+            }}
           >
             <Text style={styles.tabText}>⛰️</Text>
             <Text style={styles.tabLabel}>Descobrir</Text>
@@ -162,7 +329,10 @@ export default function App() {
           
           <TouchableOpacity 
             style={[styles.tab, currentView === 'groups' && styles.activeTab]}
-            onPress={() => setCurrentView('groups')}
+            onPress={() => {
+              setCurrentView('groups');
+              setSelectedLocation(null);
+            }}
           >
             <Text style={styles.tabText}>👥</Text>
             <Text style={styles.tabLabel}>Grupos</Text>
@@ -170,7 +340,10 @@ export default function App() {
           
           <TouchableOpacity 
             style={[styles.tab, currentView === 'matches' && styles.activeTab]}
-            onPress={() => setCurrentView('matches')}
+            onPress={() => {
+              setCurrentView('matches');
+              setSelectedLocation(null);
+            }}
           >
             <Text style={styles.tabText}>❤️</Text>
             <Text style={styles.tabLabel}>Matches</Text>
@@ -178,7 +351,10 @@ export default function App() {
           
           <TouchableOpacity 
             style={[styles.tab, currentView === 'locations' && styles.activeTab]}
-            onPress={() => setCurrentView('locations')}
+            onPress={() => {
+              setCurrentView('locations');
+              setSelectedLocation(null);
+            }}
           >
             <Text style={styles.tabText}>🗺️</Text>
             <Text style={styles.tabLabel}>Locais</Text>
@@ -379,22 +555,236 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  locationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   locationName: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 6,
     color: '#1f2937',
+    flex: 1,
+  },
+  ratingBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  locationInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
   },
   locationInfo: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6b7280',
-    marginBottom: 4,
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   locationDescription: {
     fontSize: 14,
     color: '#374151',
     lineHeight: 18,
-    marginTop: 8,
+    marginBottom: 12,
+  },
+  photoPreview: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  photoPreviewItem: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoPreviewEmoji: {
+    fontSize: 16,
+  },
+  photoPreviewMore: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoPreviewMoreText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#6b7280',
+  },
+  // Estilos para detalhes do local
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  ratingContainer: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  rating: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  locationDetailName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  detailCard: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 12,
+  },
+  infoItem: {
+    flex: 1,
+    minWidth: '45%',
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  description: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  photosContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingRight: 16,
+  },
+  photoItem: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  photoEmoji: {
+    fontSize: 32,
+  },
+  addPhotoButton: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#dbeafe',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    borderStyle: 'dashed',
+  },
+  addPhotoText: {
+    color: '#3b82f6',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  croquiContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingRight: 16,
+  },
+  croquiItem: {
+    width: 100,
+    height: 80,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  croquiEmoji: {
+    fontSize: 32,
+  },
+  addCroquiButton: {
+    width: 100,
+    height: 80,
+    backgroundColor: '#dcfce7',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#10b981',
+    borderStyle: 'dashed',
+  },
+  addCroquiText: {
+    color: '#10b981',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  techInfo: {
+    marginBottom: 8,
+  },
+  techLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  techValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
   },
   tabBar: {
     backgroundColor: 'white',
