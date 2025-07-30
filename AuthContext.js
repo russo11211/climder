@@ -1,17 +1,15 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut,
-  updateProfile
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
+import { auth, db, doc, setDoc, getDoc } from './firebaseConfig';
 
 const AuthContext = createContext({});
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -19,10 +17,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUser(user);
-        await loadUserProfile(user.uid);
+    console.log('🔄 Configurando AuthContext...');
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      console.log('👤 Estado do usuário mudou:', firebaseUser);
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        loadUserProfile(firebaseUser.uid);
       } else {
         setUser(null);
         setUserProfile(null);
@@ -33,67 +33,105 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  const loadUserProfile = async (uid) => {
+  const loadUserProfile = async (userId) => {
     try {
-      const docRef = doc(db, 'users', uid);
+      console.log('📖 Carregando perfil do usuário:', userId);
+      const docRef = doc(db, 'users', userId);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        setUserProfile(docSnap.data());
+        const profile = docSnap.data();
+        console.log('✅ Perfil carregado:', profile);
+        setUserProfile(profile);
+      } else {
+        console.log('📝 Criando perfil padrão...');
+        // Criar perfil padrão para novos usuários
+        const defaultProfile = {
+          uid: userId,
+          displayName: user?.displayName || 'Escalador',
+          email: user?.email,
+          bio: '',
+          climbingGrade: '5c',
+          climbingTypes: ['Esportiva'],
+          location: '',
+          experience: 'Iniciante',
+          availability: [],
+          profileImage: '🧗‍♀️',
+          createdAt: new Date().toISOString(),
+          lastModified: new Date().toISOString()
+        };
+        
+        await setDoc(docRef, defaultProfile);
+        setUserProfile(defaultProfile);
       }
     } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
+      console.error('❌ Erro ao carregar perfil:', error);
     }
   };
 
-  const signUp = async (email, password, profileData) => {
+  const signUp = async (email, password, userData = {}) => {
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('🚀 Iniciando cadastro...');
+      const result = await auth.createUserWithEmailAndPassword(email, password);
+      console.log('✅ Usuário criado:', result.user);
       
-      // Atualizar o perfil do usuário no Auth
-      await updateProfile(user, {
-        displayName: profileData.name
-      });
+      // Atualizar displayName
+      if (userData.displayName) {
+        await auth.updateProfile({
+          displayName: userData.displayName
+        });
+      }
 
-      // Criar documento do usuário no Firestore
-      const userDoc = {
-        uid: user.uid,
-        email: user.email,
-        name: profileData.name,
-        age: profileData.age,
-        climbingGrade: profileData.climbingGrade,
-        climbingTypes: profileData.climbingTypes,
-        location: profileData.location,
-        bio: profileData.bio,
+      // Criar perfil no Firestore
+      const userProfile = {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: userData.displayName || 'Escalador',
+        bio: userData.bio || '',
+        climbingGrade: userData.climbingGrade || '5c',
+        climbingTypes: userData.climbingTypes || ['Esportiva'],
+        location: userData.location || '',
+        experience: userData.experience || 'Iniciante',
+        availability: userData.availability || [],
+        profileImage: userData.profileImage || '🧗‍♀️',
         createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString()
+        lastModified: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'users', user.uid), userDoc);
-      setUserProfile(userDoc);
-      
+      await setDoc(doc(db, 'users', result.user.uid), userProfile);
+      setUser(result.user);
+      setUserProfile(userProfile);
+
       return { success: true };
     } catch (error) {
+      console.log('❌ Erro no cadastro:', error);
       return { success: false, error: error.message };
     }
   };
 
   const signIn = async (email, password) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      console.log('🚀 Iniciando login...');
+      const result = await auth.signInWithEmailAndPassword(email, password);
+      console.log('✅ Login bem-sucedido:', result.user);
+      
+      setUser(result.user);
       return { success: true };
     } catch (error) {
+      console.log('❌ Erro no login:', error);
       return { success: false, error: error.message };
     }
   };
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      console.log('🚪 Fazendo logout...');
+      await auth.signOut();
       setUser(null);
       setUserProfile(null);
       return { success: true };
     } catch (error) {
+      console.log('❌ Erro no logout:', error);
       return { success: false, error: error.message };
     }
   };
@@ -108,7 +146,7 @@ export const AuthProvider = ({ children }) => {
         lastModified: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'users', user.uid), updatedProfile, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
       setUserProfile(updatedProfile);
       
       return { success: true };
