@@ -3,126 +3,216 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
+  TextInput,
+  Alert,
   Modal,
   SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
+  Keyboard,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from './AuthContext';
 
-export default function ChatScreen({ visible, onClose, matchedUser }) {
-  const { userProfile } = useAuth();
+const { width, height } = Dimensions.get('window');
+
+export default function ChatScreen({ visible, onClose, matchedUser, userProfile }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const scrollViewRef = useRef(null);
 
+  // Carregar mensagens quando o chat abrir
   useEffect(() => {
     if (visible && matchedUser) {
       loadMessages();
     }
   }, [visible, matchedUser]);
 
+  // Auto-scroll para baixo quando novas mensagens chegarem
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
+  const getChatId = (userId1, userId2) => {
+    // Criar ID único para o chat baseado nos IDs dos usuários
+    const sortedIds = [userId1, userId2].sort();
+    return `chat_${sortedIds[0]}_${sortedIds[1]}`;
+  };
+
   const loadMessages = async () => {
     setLoading(true);
     try {
-      const chatId = getChatId(userProfile?.uid, matchedUser.id);
-      const savedMessages = await AsyncStorage.getItem(`chat_${chatId}`);
+      const chatId = getChatId(userProfile?.uid || 'user', matchedUser.id);
+      const savedMessages = await AsyncStorage.getItem(chatId);
       
       if (savedMessages) {
         setMessages(JSON.parse(savedMessages));
       } else {
-        // Mensagens iniciais automáticas
-        const initialMessages = [
-          {
-            id: 1,
-            text: `🎉 Vocês fizeram match! Que tal planejar uma escalada juntos?`,
-            sender: 'system',
-            timestamp: Date.now() - 1000,
-            isSystem: true
-          }
-        ];
-        setMessages(initialMessages);
-        await saveMessages(chatId, initialMessages);
+        // Primeira vez no chat - mensagem de boas-vindas
+        const welcomeMessage = {
+          id: Date.now(),
+          text: `🎉 Vocês fizeram match! Que tal se conhecerem melhor e marcarem uma escalada juntos?`,
+          sender: 'system',
+          senderName: 'Climder',
+          timestamp: Date.now(),
+          isSystem: true
+        };
+        setMessages([welcomeMessage]);
+        await saveMessages(chatId, [welcomeMessage]);
       }
     } catch (error) {
-      console.log('Erro ao carregar mensagens:', error);
+      console.error('Erro ao carregar mensagens:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
-
-  const getChatId = (userId1, userId2) => {
-    return [userId1, userId2].sort().join('_');
   };
 
   const saveMessages = async (chatId, messagesToSave) => {
     try {
-      await AsyncStorage.setItem(`chat_${chatId}`, JSON.stringify(messagesToSave));
+      await AsyncStorage.setItem(chatId, JSON.stringify(messagesToSave));
     } catch (error) {
-      console.log('Erro ao salvar mensagens:', error);
+      console.error('Erro ao salvar mensagens:', error);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || isSending) return;
 
-    const message = {
+    setIsSending(true);
+    const messageText = newMessage.trim();
+    setNewMessage('');
+
+    try {
+      const userMessage = {
+        id: Date.now(),
+        text: messageText,
+        sender: userProfile?.uid || 'user',
+        senderName: userProfile?.displayName || 'Você',
+        timestamp: Date.now(),
+        isSystem: false
+      };
+
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+
+      const chatId = getChatId(userProfile?.uid || 'user', matchedUser.id);
+      await saveMessages(chatId, updatedMessages);
+
+      // Simular resposta automática (para demonstração)
+      setTimeout(() => {
+        simulateAutoReply(updatedMessages, chatId);
+      }, 1000 + Math.random() * 2000);
+
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      Alert.alert('Erro', 'Falha ao enviar mensagem');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const simulateAutoReply = async (currentMessages, chatId) => {
+    // Simular resposta automática baseada na última mensagem
+    const lastMessage = currentMessages[currentMessages.length - 1];
+    let replyText = getAutoReply(lastMessage.text);
+
+    const autoReply = {
       id: Date.now(),
-      text: newMessage.trim(),
-      sender: userProfile?.uid || 'user',
-      senderName: userProfile?.displayName || 'Você',
+      text: replyText,
+      sender: matchedUser.id,
+      senderName: matchedUser.name,
       timestamp: Date.now(),
       isSystem: false
     };
 
-    const updatedMessages = [...messages, message];
+    const updatedMessages = [...currentMessages, autoReply];
     setMessages(updatedMessages);
-    setNewMessage('');
-
-    // Simular resposta automática (para demonstração)
-    setTimeout(() => {
-      const autoReply = {
-        id: Date.now() + 1,
-        text: getAutoReply(),
-        sender: matchedUser.id,
-        senderName: matchedUser.name,
-        timestamp: Date.now(),
-        isSystem: false
-      };
-      
-      const finalMessages = [...updatedMessages, autoReply];
-      setMessages(finalMessages);
-      
-      const chatId = getChatId(userProfile?.uid, matchedUser.id);
-      saveMessages(chatId, finalMessages);
-    }, 1500);
-
-    // Salvar mensagens
-    const chatId = getChatId(userProfile?.uid, matchedUser.id);
     await saveMessages(chatId, updatedMessages);
-
-    // Scroll para o final
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
   };
 
-  const getAutoReply = () => {
-    const replies = [
-      "Oi! Que legal que fizemos match! 🧗‍♀️",
-      "Olá! Também curto escalada! Qual seu local preferido?",
-      "Opa! Que tal escalarmos juntos no fim de semana?",
-      "Oi! Vi que você escala no mesmo nível que eu. Bora trocar uma ideia?",
-      "Olá! Adoro conhecer outros escaladores. Conta mais sobre você!",
-      "Oi! Que coincidência, também estou procurando parceiros para escalar!",
-      "Olá! Seu perfil é interessante. Qual tipo de escalada você mais curte?"
+  const getAutoReply = (messageText) => {
+    const text = messageText.toLowerCase();
+    
+    // Respostas baseadas em palavras-chave relacionadas à escalada
+    if (text.includes('escalada') || text.includes('escalar')) {
+      return "Amo escalada também! Qual tipo você mais curte?";
+    }
+    if (text.includes('local') || text.includes('onde')) {
+      return "Conheço vários locais bacanas! Que tal marcarmos para ir em algum?";
+    }
+    if (text.includes('grade') || text.includes('dificuldade')) {
+      return `Escalo principalmente ${matchedUser.grade}, mas gosto de tentar coisas mais difíceis às vezes!`;
+    }
+    if (text.includes('quando') || text.includes('dia')) {
+      return "Sou bem flexível com horários! E você, prefere manhã ou tarde?";
+    }
+    if (text.includes('equipamento') || text.includes('gear')) {
+      return "Tenho equipamento completo! Se precisar de algo posso levar.";
+    }
+    if (text.includes('experiência') || text.includes('tempo')) {
+      return `Escalo há ${matchedUser.experience || '5 anos'}! E você, há quanto tempo escala?`;
+    }
+    if (text.includes('oi') || text.includes('olá') || text.includes('hello')) {
+      return "Oi! Que legal que fizemos match! 🧗‍♀️";
+    }
+    if (text.includes('obrigad') || text.includes('valeu')) {
+      return "De nada! É sempre bom conhecer outros escaladores! 😊";
+    }
+    
+    // Respostas genéricas variadas
+    const genericReplies = [
+      "Interessante! Conta mais sobre isso!",
+      "Concordo totalmente! 👍",
+      "Que bacana! Também penso assim.",
+      "Show! Vamos marcar uma escalada em breve?",
+      "Perfeito! Acho que vamos nos dar bem escalando juntos! 🧗‍♀️",
+      "Legal! Qual foi sua melhor experiência escalando?",
+      "Massa! Tenho certeza que será uma ótima parceria!"
     ];
-    return replies[Math.floor(Math.random() * replies.length)];
+    
+    return genericReplies[Math.floor(Math.random() * genericReplies.length)];
+  };
+
+  const proposeClimbing = () => {
+    const proposal = {
+      id: Date.now(),
+      text: `🏔️ Que tal escalarmos juntos no final de semana? Posso sugerir alguns locais incríveis que conheço!`,
+      sender: userProfile?.uid || 'user',
+      senderName: userProfile?.displayName || 'Você',
+      timestamp: Date.now(),
+      isSystem: false,
+      isProposal: true
+    };
+
+    const updatedMessages = [...messages, proposal];
+    setMessages(updatedMessages);
+
+    const chatId = getChatId(userProfile?.uid || 'user', matchedUser.id);
+    saveMessages(chatId, updatedMessages);
+  };
+
+  const askLocation = () => {
+    const question = {
+      id: Date.now(),
+      text: `📍 Qual local de escalada você mais gosta? Sempre estou procurando novos lugares para explorar!`,
+      sender: userProfile?.uid || 'user',
+      senderName: userProfile?.displayName || 'Você',
+      timestamp: Date.now(),
+      isSystem: false,
+      isQuestion: true
+    };
+
+    const updatedMessages = [...messages, question];
+    setMessages(updatedMessages);
+
+    const chatId = getChatId(userProfile?.uid || 'user', matchedUser.id);
+    saveMessages(chatId, updatedMessages);
   };
 
   const formatTime = (timestamp) => {
@@ -133,22 +223,25 @@ export default function ChatScreen({ visible, onClose, matchedUser }) {
     });
   };
 
-  const proposeClimbingSession = () => {
-    const suggestion = {
-      id: Date.now(),
-      text: `🏔️ Que tal escalarmos juntos? Posso sugerir alguns locais bacanas!`,
-      sender: userProfile?.uid || 'user',
-      senderName: userProfile?.displayName || 'Você',
-      timestamp: Date.now(),
-      isSystem: false,
-      isProposal: true
-    };
-
-    const updatedMessages = [...messages, suggestion];
-    setMessages(updatedMessages);
-
-    const chatId = getChatId(userProfile?.uid, matchedUser.id);
-    saveMessages(chatId, updatedMessages);
+  const formatDate = (timestamp) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Hoje';
+    }
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Ontem';
+    }
+    
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit' 
+    });
   };
 
   if (!visible || !matchedUser) return null;
@@ -172,105 +265,138 @@ export default function ChatScreen({ visible, onClose, matchedUser }) {
             </View>
           </View>
           
-          <TouchableOpacity style={styles.infoButton} onPress={() => 
-            Alert.alert('Perfil', `${matchedUser.name}\n\n${matchedUser.bio}`)
-          }>
+          <TouchableOpacity 
+            style={styles.infoButton} 
+            onPress={() => 
+              Alert.alert(
+                `${matchedUser.name}`,
+                `${matchedUser.bio}\n\n📍 ${matchedUser.location}\n🧗‍♀️ ${matchedUser.experience} de experiência\n⏰ Prefere: ${matchedUser.preference}`
+              )
+            }
+          >
             <Text style={styles.infoButtonText}>ℹ️</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Messages */}
+        {/* Messages Container */}
         <ScrollView 
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {loading ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Carregando conversa...</Text>
             </View>
           ) : (
-            messages.map((message) => (
-              <View
-                key={message.id}
-                style={[
-                  styles.messageContainer,
-                  message.isSystem 
-                    ? styles.systemMessage
-                    : message.sender === (userProfile?.uid || 'user')
-                    ? styles.myMessage
-                    : styles.theirMessage
-                ]}
-              >
-                {message.isSystem ? (
-                  <Text style={styles.systemMessageText}>{message.text}</Text>
-                ) : (
-                  <>
-                    <Text style={[
-                      styles.messageText,
-                      message.sender === (userProfile?.uid || 'user')
-                        ? styles.myMessageText
-                        : styles.theirMessageText
-                    ]}>
-                      {message.text}
-                    </Text>
-                    <Text style={[
-                      styles.messageTime,
-                      message.sender === (userProfile?.uid || 'user')
-                        ? styles.myMessageTime
-                        : styles.theirMessageTime
-                    ]}>
-                      {formatTime(message.timestamp)}
-                    </Text>
-                  </>
-                )}
-              </View>
-            ))
+            messages.map((message, index) => {
+              const showDate = index === 0 || 
+                formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
+              
+              return (
+                <View key={message.id}>
+                  {showDate && (
+                    <View style={styles.dateContainer}>
+                      <Text style={styles.dateText}>
+                        {formatDate(message.timestamp)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View
+                    style={[
+                      styles.messageContainer,
+                      message.isSystem 
+                        ? styles.systemMessage
+                        : message.sender === (userProfile?.uid || 'user')
+                        ? styles.userMessage
+                        : styles.otherMessage
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.messageBubble,
+                        message.isSystem 
+                          ? styles.systemBubble
+                          : message.sender === (userProfile?.uid || 'user')
+                          ? styles.userBubble
+                          : styles.otherBubble,
+                        message.isProposal && styles.proposalBubble,
+                        message.isQuestion && styles.questionBubble
+                      ]}
+                    >
+                      {!message.isSystem && (
+                        <Text style={styles.senderName}>
+                          {message.senderName}
+                        </Text>
+                      )}
+                      
+                      <Text
+                        style={[
+                          styles.messageText,
+                          message.isSystem 
+                            ? styles.systemText
+                            : message.sender === (userProfile?.uid || 'user')
+                            ? styles.userText
+                            : styles.otherText
+                        ]}
+                      >
+                        {message.text}
+                      </Text>
+                      
+                      <Text
+                        style={[
+                          styles.timeText,
+                          message.sender === (userProfile?.uid || 'user')
+                            ? styles.userTimeText
+                            : styles.otherTimeText
+                        ]}
+                      >
+                        {formatTime(message.timestamp)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
           )}
         </ScrollView>
 
-        {/* Quick Actions */}
+        {/* Quick Action Buttons */}
         <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={proposeClimbingSession}
-          >
-            <Text style={styles.quickActionText}>🏔️ Propor Escalada</Text>
+          <TouchableOpacity style={styles.quickButton} onPress={proposeClimbing}>
+            <Text style={styles.quickButtonText}>🏔️ Propor Escalada</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => setNewMessage('Qual seu local favorito para escalar?')}
-          >
-            <Text style={styles.quickActionText}>📍 Perguntar Local</Text>
+          <TouchableOpacity style={styles.quickButton} onPress={askLocation}>
+            <Text style={styles.quickButtonText}>📍 Perguntar Local</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Input */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.inputContainer}
-        >
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Digite sua mensagem..."
-              placeholderTextColor="#9ca3af"
-              value={newMessage}
-              onChangeText={setNewMessage}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity 
-              style={[styles.sendButton, !newMessage.trim() && styles.sendButtonDisabled]}
-              onPress={sendMessage}
-              disabled={!newMessage.trim()}
-            >
-              <Text style={styles.sendButtonText}>📤</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+        {/* Message Input */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={newMessage}
+            onChangeText={setNewMessage}
+            placeholder="Digite sua mensagem..."
+            placeholderTextColor="#9ca3af"
+            multiline={true}
+            maxLength={500}
+            onSubmitEditing={sendMessage}
+            blurOnSubmit={false}
+          />
+          <TouchableOpacity 
+            style={[styles.sendButton, (!newMessage.trim() || isSending) && styles.sendButtonDisabled]}
+            onPress={sendMessage}
+            disabled={!newMessage.trim() || isSending}
+          >
+            <Text style={styles.sendButtonText}>
+              {isSending ? '⏳' : '📤'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -279,31 +405,35 @@ export default function ChatScreen({ visible, onClose, matchedUser }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#f8fafc',
   },
+  
+  // Header Styles
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   backButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    marginRight: 16,
   },
   backButtonText: {
-    color: '#3b82f6',
     fontSize: 16,
+    color: '#3b82f6',
     fontWeight: '600',
   },
   headerInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 12,
   },
   headerIcon: {
     fontSize: 32,
@@ -319,21 +449,20 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   infoButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   infoButtonText: {
-    fontSize: 18,
+    fontSize: 20,
+    color: '#6b7280',
   },
+
+  // Messages Styles
   messagesContainer: {
     flex: 1,
   },
   messagesContent: {
     padding: 16,
+    paddingBottom: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -344,96 +473,133 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
   },
+  
+  // Date Separator
+  dateContainer: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+
+  // Message Containers
   messageContainer: {
-    marginVertical: 4,
-    maxWidth: '80%',
+    marginBottom: 12,
   },
   systemMessage: {
-    alignSelf: 'center',
-    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+  },
+  userMessage: {
+    alignItems: 'flex-end',
+  },
+  otherMessage: {
+    alignItems: 'flex-start',
+  },
+
+  // Message Bubbles
+  messageBubble: {
+    maxWidth: width * 0.75,
+    padding: 12,
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginVertical: 8,
+    position: 'relative',
   },
-  systemMessageText: {
-    fontSize: 14,
-    color: '#92400e',
-    textAlign: 'center',
-    fontWeight: '500',
+  systemBubble: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
-  myMessage: {
-    alignSelf: 'flex-end',
+  userBubble: {
     backgroundColor: '#3b82f6',
-    borderRadius: 16,
     borderBottomRightRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
-  theirMessage: {
-    alignSelf: 'flex-start',
+  otherBubble: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    borderBottomLeftRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    borderBottomLeftRadius: 4,
+  },
+  proposalBubble: {
+    borderColor: '#10b981',
+    borderWidth: 2,
+  },
+  questionBubble: {
+    borderColor: '#f59e0b',
+    borderWidth: 2,
+  },
+
+  // Message Text
+  senderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#6b7280',
   },
   messageText: {
     fontSize: 16,
     lineHeight: 20,
+    marginBottom: 4,
   },
-  myMessageText: {
+  systemText: {
+    color: '#3b82f6',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  userText: {
     color: 'white',
   },
-  theirMessageText: {
+  otherText: {
     color: '#1f2937',
   },
-  messageTime: {
+  timeText: {
     fontSize: 11,
-    marginTop: 4,
+    alignSelf: 'flex-end',
   },
-  myMessageTime: {
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'right',
+  userTimeText: {
+    color: 'rgba(255, 255, 255, 0.7)',
   },
-  theirMessageTime: {
+  otherTimeText: {
     color: '#9ca3af',
-    textAlign: 'left',
   },
+
+  // Quick Actions
   quickActions: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    padding: 12,
+    gap: 8,
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    gap: 8,
+    borderTopColor: '#f3f4f6',
   },
-  quickActionButton: {
+  quickButton: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#eff6ff',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
-  quickActionText: {
-    fontSize: 12,
-    color: '#374151',
+  quickButtonText: {
+    fontSize: 14,
+    color: '#3b82f6',
     fontWeight: '600',
   },
+
+  // Input Container
   inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
     backgroundColor: 'white',
+    alignItems: 'flex-end',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
   },
   textInput: {
     flex: 1,
@@ -442,15 +608,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    marginRight: 8,
+    marginRight: 12,
     maxHeight: 100,
     fontSize: 16,
-    color: '#1f2937',
+    backgroundColor: '#f9fafb',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#3b82f6',
     justifyContent: 'center',
     alignItems: 'center',
@@ -459,6 +625,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1d5db',
   },
   sendButtonText: {
-    fontSize: 18,
+    fontSize: 20,
   },
 });
