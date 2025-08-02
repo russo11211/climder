@@ -10,7 +10,6 @@ import {
   Modal,
   SafeAreaView,
   Switch,
-  Picker,
   Platform,
 } from 'react-native';
 
@@ -31,6 +30,8 @@ export default function CreateGroupModal({ visible, onClose, onCreateGroup, user
 
   const [errors, setErrors] = useState({});
 
+  const climbingTypes = ['Esportiva', 'Boulder', 'Tradicional', 'Via Ferrata', 'Trad'];
+
   const difficultyOptions = [
     '3a - 4c (Iniciante)',
     '5a - 6b (Intermediário)',
@@ -46,14 +47,6 @@ export default function CreateGroupModal({ visible, onClose, onCreateGroup, user
     'Intermediário (2-5 anos)',
     'Avançado (5+ anos)',
     'Qualquer nível'
-  ];
-
-  const climbingTypes = [
-    'Esportiva',
-    'Boulder',
-    'Tradicional',
-    'Mista',
-    'Via Ferrata'
   ];
 
   const validateForm = () => {
@@ -231,113 +224,71 @@ export default function CreateGroupModal({ visible, onClose, onCreateGroup, user
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Tipo de Escalada</Text>
-              <View style={styles.pickerContainer}>
-                {Platform.OS === 'ios' ? (
-                  <Picker
-                    selectedValue={groupData.climbingType}
-                    onValueChange={(value) => setGroupData({...groupData, climbingType: value})}
-                    style={styles.picker}
-                  >
-                    {climbingTypes.map((type) => (
-                      <Picker.Item key={type} label={type} value={type} />
-                    ))}
-                  </Picker>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.chipContainer}>
-                      {climbingTypes.map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          style={[
-                            styles.chip,
-                            groupData.climbingType === type && styles.chipSelected
-                          ]}
-                          onPress={() => setGroupData({...groupData, climbingType: type})}
-                        >
-                          <Text style={[
-                            styles.chipText,
-                            groupData.climbingType === type && styles.chipTextSelected
-                          ]}>{type}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                )}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.chipContainer}>
+                  {climbingTypes.map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.chip,
+                        groupData.climbingType === type && styles.chipSelected
+                      ]}
+                      onPress={() => setGroupData({...groupData, climbingType: type})}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        groupData.climbingType === type && styles.chipTextSelected
+                      ]}>{type}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Dificuldade</Text>
-              <View style={styles.pickerContainer}>
-                {Platform.OS === 'ios' ? (
-                  <Picker
-                    selectedValue={groupData.difficulty}
-                    onValueChange={(value) => setGroupData({...groupData, difficulty: value})}
-                    style={styles.picker}
-                  >
-                    {difficultyOptions.map((diff) => (
-                      <Picker.Item key={diff} label={diff} value={diff} />
-                    ))}
-                  </Picker>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.chipContainer}>
-                      {difficultyOptions.map((diff) => (
-                        <TouchableOpacity
-                          key={diff}
-                          style={[
-                            styles.chip,
-                            groupData.difficulty === diff && styles.chipSelected
-                          ]}
-                          onPress={() => setGroupData({...groupData, difficulty: diff})}
-                        >
-                          <Text style={[
-                            styles.chipText,
-                            groupData.difficulty === diff && styles.chipTextSelected
-                          ]}>{diff}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                )}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.chipContainer}>
+                  {difficultyOptions.map((diff) => (
+                    <TouchableOpacity
+                      key={diff}
+                      style={[
+                        styles.chip,
+                        groupData.difficulty === diff && styles.chipSelected
+                      ]}
+                      onPress={() => setGroupData({...groupData, difficulty: diff})}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        groupData.difficulty === diff && styles.chipTextSelected
+                      ]}>{diff}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Experiência Necessária</Text>
-              <View style={styles.pickerContainer}>
-                {Platform.OS === 'ios' ? (
-                  <Picker
-                    selectedValue={groupData.requiredExperience}
-                    onValueChange={(value) => setGroupData({...groupData, requiredExperience: value})}
-                    style={styles.picker}
-                  >
-                    {experienceOptions.map((exp) => (
-                      <Picker.Item key={exp} label={exp} value={exp} />
-                    ))}
-                  </Picker>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.chipContainer}>
-                      {experienceOptions.map((exp) => (
-                        <TouchableOpacity
-                          key={exp}
-                          style={[
-                            styles.chip,
-                            groupData.requiredExperience === exp && styles.chipSelected
-                          ]}
-                          onPress={() => setGroupData({...groupData, requiredExperience: exp})}
-                        >
-                          <Text style={[
-                            styles.chipText,
-                            groupData.requiredExperience === exp && styles.chipTextSelected
-                          ]}>{exp}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                )}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.chipContainer}>
+                  {experienceOptions.map((exp) => (
+                    <TouchableOpacity
+                      key={exp}
+                      style={[
+                        styles.chip,
+                        groupData.requiredExperience === exp && styles.chipSelected
+                      ]}
+                      onPress={() => setGroupData({...groupData, requiredExperience: exp})}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        groupData.requiredExperience === exp && styles.chipTextSelected
+                      ]}>{exp}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           </View>
 

@@ -9,12 +9,16 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 
-export default function AuthScreen({ onLogin }) {
+export default function AuthScreen({ onLogin, onSignUp, authError }) {
   const [email, setEmail] = useState('teste@climder.com');
   const [password, setPassword] = useState('123456');
+  const [name, setName] = useState('João Escalador');
+  const [location, setLocation] = useState('São Paulo, SP');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUpMode, setIsSignUpMode] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -25,29 +29,47 @@ export default function AuthScreen({ onLogin }) {
     setIsLoading(true);
 
     try {
-      // Simular delay de login
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Verificar credenciais (simulado)
-      if (email === 'teste@climder.com' && password === '123456') {
-        const userData = {
-          uid: 'test-user-123',
-          displayName: 'Escalador Teste',
-          email: email,
-          grade: '5c',
-          climbingType: 'Esportiva',
-          experience: '5 anos',
-          location: 'São Paulo, SP',
-          preferences: 'Weekends'
-        };
-
-        onLogin(userData);
-      } else {
-        Alert.alert('Erro', 'Email ou senha incorretos');
-      }
+      // Chamar função de login do Firebase
+      await onLogin(email, password);
     } catch (error) {
       console.error('Erro no login:', error);
-      Alert.alert('Erro', 'Falha ao fazer login');
+      // Erro será mostrado via authError prop
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!email.trim() || !password.trim() || !name.trim() || !location.trim()) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Chamar função de cadastro do Firebase
+      const profileData = {
+        displayName: name,
+        location: location,
+        age: 25,
+        bio: 'Escalador iniciante buscando parceiros de escalada!',
+        climbingGrades: {
+          sport: '5.8',
+          boulder: 'V2',
+          trad: '5.6'
+        },
+        preferences: {
+          climbingStyles: ['sport', 'boulder'],
+          maxDistance: 50,
+          daysAvailable: ['weekend']
+        }
+      };
+      
+      await onSignUp(email, password, profileData);
+    } catch (error) {
+      console.error('Erro no cadastro:', error);
+      // Erro será mostrado via authError prop
     } finally {
       setIsLoading(false);
     }
@@ -56,6 +78,13 @@ export default function AuthScreen({ onLogin }) {
   const fillTestCredentials = () => {
     setEmail('teste@climder.com');
     setPassword('123456');
+    setName('João Escalador');
+    setLocation('São Paulo, SP');
+  };
+
+  const toggleMode = () => {
+    setIsSignUpMode(!isSignUpMode);
+    setIsLoading(false);
   };
 
   return (
@@ -68,11 +97,51 @@ export default function AuthScreen({ onLogin }) {
         <View style={styles.header}>
           <Text style={styles.logo}>🧗‍♀️</Text>
           <Text style={styles.title}>Climder</Text>
-          <Text style={styles.subtitle}>Conectando escaladores</Text>
+          <Text style={styles.subtitle}>
+            {isSignUpMode ? 'Criar sua conta no Firebase' : 'Conectando escaladores com Firebase'}
+          </Text>
         </View>
+
+        {/* Erro de autenticação */}
+        {authError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorTitle}>❌ Erro</Text>
+            <Text style={styles.errorMessage}>{authError}</Text>
+          </View>
+        )}
 
         {/* Form */}
         <View style={styles.form}>
+          {/* Campos para cadastro */}
+          {isSignUpMode && (
+            <>
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Nome Completo</Text>
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Seu nome completo"
+                  placeholderTextColor="#9ca3af"
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Localização</Text>
+                <TextInput
+                  style={styles.input}
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="Sua cidade, estado"
+                  placeholderTextColor="#9ca3af"
+                  autoCapitalize="words"
+                />
+              </View>
+            </>
+          )}
+
+          {/* Campos comuns */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
             <TextInput
@@ -99,37 +168,66 @@ export default function AuthScreen({ onLogin }) {
             />
           </View>
 
+          {/* Botão principal */}
           <TouchableOpacity
             style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
+            onPress={isSignUpMode ? handleSignUp : handleLogin}
             disabled={isLoading}
           >
-            <Text style={styles.loginButtonText}>
-              {isLoading ? 'Entrando...' : 'Entrar'}
+            {isLoading ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text style={styles.loginButtonText}>
+                {isSignUpMode ? '📝 Criar Conta Firebase' : '🔥 Entrar com Firebase'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Botão para alternar modo */}
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={toggleMode}
+            disabled={isLoading}
+          >
+            <Text style={styles.toggleButtonText}>
+              {isSignUpMode 
+                ? '🔑 Já tem conta? Faça login' 
+                : '📝 Não tem conta? Cadastre-se'
+              }
             </Text>
           </TouchableOpacity>
 
           {/* Credenciais de teste */}
           <View style={styles.testCredentials}>
-            <Text style={styles.testTitle}>Credenciais de Teste:</Text>
+            <Text style={styles.testTitle}>
+              {isSignUpMode ? 'Dados de Teste para Cadastro:' : 'Credenciais de Teste:'}
+            </Text>
             <TouchableOpacity 
               style={styles.testButton}
               onPress={fillTestCredentials}
             >
-              <Text style={styles.testButtonText}>📋 Usar credenciais de teste</Text>
+              <Text style={styles.testButtonText}>
+                📋 {isSignUpMode ? 'Usar dados de teste' : 'Usar credenciais de teste'}
+              </Text>
             </TouchableOpacity>
             <Text style={styles.testInfo}>
               Email: teste@climder.com{'\n'}
               Senha: 123456
+              {isSignUpMode && `\nNome: João Escalador\nLocalização: São Paulo, SP`}
             </Text>
+            {!isSignUpMode && (
+              <Text style={styles.testNote}>
+                ⚠️ Se o login falhar, crie a conta primeiro clicando em "Cadastre-se"
+              </Text>
+            )}
           </View>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Versão de demonstração{'\n'}
-            Sistema de autenticação simulado
+            Climder com Firebase{'\n'}
+            Sistema de autenticação real
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -249,6 +347,53 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+
+  // Error Styles
+  errorContainer: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#dc2626',
+    marginBottom: 4,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: '#991b1b',
+    lineHeight: 20,
+  },
+
+  // Toggle Button Styles
+  toggleButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  toggleButtonText: {
+    color: '#3b82f6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Test Note Styles
+  testNote: {
+    fontSize: 11,
+    color: '#f59e0b',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginTop: 8,
+    backgroundColor: '#fef3c7',
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
   },
 
   // Footer Styles

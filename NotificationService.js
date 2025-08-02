@@ -110,7 +110,7 @@ class NotificationService {
     try {
       // IMPORTANTE: Substitua 'your-expo-project-id' pelo ID real do seu projeto
       const token = (await Notifications.getExpoPushTokenAsync({
-        projectId: 'your-expo-project-id', // ⚠️ ALTERE AQUI
+        projectId: '0047d1b9-6483-4a0e-b55a-beeebc06307d',
       })).data;
       
       // Salvar token localmente para uso futuro

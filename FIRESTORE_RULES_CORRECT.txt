@@ -1,0 +1,20 @@
+🔥 REGRAS CORRETAS DO FIRESTORE - COPIE E COLE NO FIREBASE CONSOLE
+
+⚠️ IMPORTANTE: Vá em Firebase Console > Firestore Database > Rules e substitua TODAS as regras por este código:
+
+r
+
+📋 PASSOS PARA APLICAR:
+
+1. Vá em: https://console.firebase.google.com/
+2. Selecione seu projeto "climderapp"
+3. Menu lateral: "Firestore Database"
+4. Clique na aba "Rules"
+5. DELETE tudo que está lá
+6. COPIE e COLE o código acima
+7. Clique em "Publish"
+
+✅ Isso deve resolver os erros de "Missing or insufficient permissions"!
+
+⚠️ ATENÇÃO: Essas regras permitem acesso total para usuários autenticados. 
+Em produção, use as regras comentadas que são mais seguras.
